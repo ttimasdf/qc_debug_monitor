@@ -473,7 +473,7 @@ class DiagProt(DiagSerial):
 
         pass
 
-    def handle_message_terse(self, ssid, message, args):
+    def handle_message_terse(self, ssid, line, message, args):
 
         pass
 
