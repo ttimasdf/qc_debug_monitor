@@ -606,7 +606,7 @@ class DiagLogger(DiagProt):
 
         if self.terse_hash_db is not None and \
            message in self.terse_hash_db:
-            print("found:", message)
+
             # get message text and file name by hash
             msg_file, msg_text = self.terse_hash_db[message]
 
