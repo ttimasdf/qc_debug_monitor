@@ -19,7 +19,7 @@
 import sys, os, signal, time, tempfile, logging
 
 from struct import pack, unpack
-from Queue import Queue
+from queue import Queue
 from threading import Thread
 from optparse import OptionParser, make_option
 
@@ -259,32 +259,32 @@ class DiagProt(DiagSerial):
 
         for b in data:
 
-            ret = (ret >> 8) ^ self.crc_table[(ret ^ ord(b)) & 0xff]
+            ret = (ret >> 8) ^ self.crc_table[(ret ^ b) & 0xff]
 
         return ret ^ 0xffff
 
     def escape(self, data):
 
-        return data.replace('\x7d', '\x7d\x5d').replace('\x7e', '\x7d\x5e')
+        return data.replace(b'\x7d', b'\x7d\x5d').replace(b'\x7e', b'\x7d\x5e')
 
     def unescape(self, data):
 
-        return data.replace('\x7d\x5e', '\x7e').replace('\x7d\x5d', '\x7d')
+        return data.replace(b'\x7d\x5e', b'\x7e').replace(b'\x7d\x5d', b'\x7d')
 
     def msg_format(self, message, args):
 
-        message = message.replace('%p', '%x')
+        message = message.replace(b'%p', b'%x')
 
-        return message % tuple(args[: message.count('%')])
+        return message % tuple(args[: message.count(b'%')])
 
     def make_packet(self, data):
 
         data = data + pack('<H', self.crc_16(data))        
-        data = self.escape(data) + '\x7e'
+        data = self.escape(data) + b'\x7e'
 
         return data
 
-    def write(self, cmd, sub_cmd = None, data = ''):
+    def write(self, cmd, sub_cmd = None, data = b''):
 
         hdr = pack('<BB', cmd, sub_cmd) if sub_cmd else pack('<B', cmd)
 
@@ -329,7 +329,7 @@ class DiagProt(DiagSerial):
 
     def send_msg_config_set_rt_mask(self, ssid_start, ssid_end, on = True):
 
-        data = ''
+        data = b''
 
         # create masks list for specified subsystems
         for i in range(0, ssid_end - ssid_start + 1):
@@ -355,7 +355,7 @@ class DiagProt(DiagSerial):
 
         args = data[19 :]
         message = args[(num_args * 4) :]
-        message, file_name, _ = message.split('\0')
+        message, file_name, _ = message.split(b'\0')
 
         for i in range(0, num_args):
         
@@ -399,7 +399,7 @@ class DiagProt(DiagSerial):
 
     def do_receive(self):
 
-        old_data = ''
+        old_data = b''
 
         self.flush()
 
@@ -410,7 +410,7 @@ class DiagProt(DiagSerial):
             if data is None: continue
 
             data = old_data + data
-            data = data.split('\x7e')
+            data = data.split(b'\x7e')
             old_data = data.pop()
 
             for packet in data:
@@ -435,14 +435,14 @@ class DiagProt(DiagSerial):
 
         # parse packet header
         data = packet[1 : -2]
-        cmd = ord(packet[0])
+        cmd = packet[0]
         crc, = unpack('<H', packet[-2 :])        
 
         # verify packet control sum
         if self.crc_16(packet[: -2]) != crc:
 
             self.logger.error('[!] Bad diag packet control sum')
-            self.running = False
+            #self.running = False
 
         else:
 
@@ -550,7 +550,7 @@ class DiagLogger(DiagProt):
             # dedicated subsystems logs are not used
             return None
 
-        if self.output_fd.has_key(ssid): 
+        if ssd in self.output_fd: 
 
             # return existing log file handle
             return self.output_fd[ssid]
@@ -575,7 +575,7 @@ class DiagLogger(DiagProt):
             
         if file_name is not None and line is not None:
 
-            location = ' : %s(%d)' % (file_name, line)
+            location = ' : %s(%d)' % (file_name.decode(), line)
 
         if self.subsystems is not None:
 
@@ -589,7 +589,7 @@ class DiagLogger(DiagProt):
                     supress = False
                     break
 
-        message = '%s0x%.4x%s : %s' % (timestamp, ssid, location, message)
+        message = '%s0x%.4x%s : %s' % (timestamp, ssid, location, message.decode() if isinstance(message, bytes)  else message)
 
         if not supress:
 
@@ -605,8 +605,8 @@ class DiagLogger(DiagProt):
     def handle_message_terse(self, ssid, line, message, args):
 
         if self.terse_hash_db is not None and \
-           self.terse_hash_db.has_key(message):
-
+           message in self.terse_hash_db:
+            print("found:", message)
             # get message text and file name by hash
             msg_file, msg_text = self.terse_hash_db[message]
 
@@ -653,14 +653,14 @@ class DiagLogger(DiagProt):
             line = fd.readline()
 
             while line:
-               
-                items = line.strip().split(',')
-                if len(items) > 2:
 
-                    try: 
+                items = line.strip().split(b':', 2)
+                if len(items) == 3:
+
+                    try:
 
                         # decode hash value
-                        val = int(items[0], 16) 
+                        val = int(items[0])
 
                     except ValueError: val = None
 
@@ -668,7 +668,7 @@ class DiagLogger(DiagProt):
 
                         # decode file name and message text
                         msg_file = items[1]
-                        msg_text = ','.join(items[2: ])
+                        msg_text = items[2]
 
                         ret[val] = ( msg_file, msg_text )
 
@@ -754,7 +754,7 @@ def pid_stop():
         os.kill(pid, signal.SIGINT)
         time.sleep(1)
 
-    except OSError, e:
+    except OSError as e:
 
         try: os.unlink(PID_FILE_PATH)
         except: pass
